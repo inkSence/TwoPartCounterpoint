@@ -1,12 +1,25 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import time
 import numpy
-import pyaudio
 import fluidsynth
 from random import randint
 import copy
+from pathlib import Path
+
+
+def numpy_to_bytes(samples):
+    """Convert FluidSynth/Numpy samples to PCM16 bytes for PyAudio under Python 3.
+    Tries the legacy fluidsynth.raw_audio_string first, then falls back to manual conversion.
+    """
+    try:
+        return fluidsynth.raw_audio_string(samples)
+    except Exception:
+        pass
+    s = numpy.asarray(samples, dtype=numpy.float32)
+    s = numpy.clip(s, -1.0, 1.0)
+    return (s * 32767).astype(numpy.int16).tobytes()
 
 #Die folgende Liste umfasst die kleine und die eingestrichene Oktave. Genauer gesagt, sind es die Grenzen 
 #für einen Tenor mit großem Umfang. (vgl. T. Daniel S.35)
@@ -47,14 +60,14 @@ class Melodie(object):
 				if anzahl_zaehlzeiten > position_im_stueck:
 					return i
 			return len(self.notenliste)
-			print "Offensichtlich ist position_im_stueck >= anzahl zählzeiten."
-			print "Damit liegt die Position außerhalb der Notenliste."
+			print("Offensichtlich ist position_im_stueck >= anzahl zählzeiten.")
+			print("Damit liegt die Position außerhalb der Notenliste.")
 	def anzahl_zaehlzeiten_bis_zur_note(self, notennummer):
 		if self.notenliste == []:
 			return 0
 		elif len(self.notenliste) <= notennummer:
-			print "anzahl_zaehlzeiten_bis_zur_note hat eine zu große notennummer."
-			print "Durch die notennummer kann kein Element der notenliste erreicht werden."
+			print("anzahl_zaehlzeiten_bis_zur_note hat eine zu große notennummer.")
+			print("Durch die notennummer kann kein Element der notenliste erreicht werden.")
 		else:
 			anzahl_zaehlzeiten = 0
 			for i in range(0, notennummer, 1):
@@ -93,14 +106,16 @@ class Melodie(object):
 				return True
 			else:
 				return False
-	def mi_contra_fa_melodisch(self, position_im_stueck):
+	def mi_contra_fa_melodisch(self, position_im_stueck, regeln_obj):
 		nummer = self.get_aktuelleNotenNummer(position_im_stueck)
-		if mi_contra_fa(letztesLokalesExtremum, neuesLokalesExtremum):
-			return True
-		else:
+		self.letzte_drei_haben_Extremum(nummer)
+		try:
+			return regeln_obj.mi_contra_fa(self.letztesLokalesExtremum[1], self.neuesLokalesExtremum[1])
+		except Exception:
 			return False
-	def una_nota_supra_la(self, (string, lokalesExtremum), lastMidipitch):
-		if lokales_Extremum == lastMidipitch:
+	def una_nota_supra_la(self, extremum_tuple, lastMidipitch):
+		(string, lokalesExtremum) = extremum_tuple
+		if lokalesExtremum == lastMidipitch:
 			if lastMidipitch == c_dur[7] and string == "lokalesMaximum":
 				lastMidipitch = f_dur[7] #semper est canenda fa
 				return True, lastMidipitch
@@ -158,7 +173,8 @@ class HarmonischeStruktur(object):
 		elif intervall in [1, 2, 5, 6, 10, 11]:
 			klang = "Dissonanz"
 		else:
-			print "error: Intervall-Qualität konnte nicht bestimmt werden.", intervall
+			print("error: Intervall-Qualität konnte nicht bestimmt werden.", intervall)
+			klang = "Dissonanz"
 		return klang[-9:]
 	def get_taktposition(self, position_im_stueck):
 		"""sähen die 8 Viertel in einem Takt aus wie folgt, dann:
@@ -177,7 +193,7 @@ class HarmonischeStruktur(object):
 		elif rest in [1, 3, 5, 7]:
 			taktposition = "leichteViertelPosition"
 		else:
-			print "In get_taktposition konnte nichts taktposition zugeordnet werden."
+			print("In get_taktposition konnte nichts taktposition zugeordnet werden.")
 		return taktposition
 	def get_erlaubte_notenlaenge(self, taktposition):
 		notenlaengen = [1, 2, 3, 4, 6, 8]
@@ -190,7 +206,7 @@ class HarmonischeStruktur(object):
 			erlaubte_notenlaenge = notenlaengen[:2]
 		else:
 			erlaubte_notenlaenge = notenlaengen[:]
-			print "error: else-Statement in get_erlaubte_notenlaenge"
+			print("error: else-Statement in get_erlaubte_notenlaenge")
 		return erlaubte_notenlaenge
 	def notenlaenge_waehlen(self, liste):
 		return liste[randint(0, len(liste) - 1)]
@@ -207,7 +223,7 @@ class HarmonischeStruktur(object):
 		elif beginn1 == True and beginn2 == True:
 			return "k" #keine Stimme hat liegenden Ton, beide Töne beginnen gerade.
 		else:
-			print "error in genau_ein_ton_liegt"
+			print("error in genau_ein_ton_liegt")
 	def wie_lange_liegt_liegender_ton(self, position_im_stueck, anzahl_zaehlzeiten1, anzahl_zaehlzeiten2):
 		#Vielleicht braucht man diese Funktion gar nicht. 
 		#Jede Tonlänge ist zulässig, um aus der Dissonanz wieder heraus zu gehen.
@@ -249,19 +265,19 @@ class KpRegeln(object):
 			return True
 		else:
 			return False
-	def dissonanz_moeglich(self, last_interval_quality, anzahl_zaehlzeiten1, anzahl_zaehlzeiten2):
-		if (welcher_ton_liegt(anzahl_zaehlzeiten1, anzahl_zaehlzeiten2) != None 
-		and last_interval_quality == "Konsonanz"):
-			return True
-		else:
-			return False
-	def welche_stimme_darf_dissonieren(self, last_interval_quality, anzahl_zaehlzeiten1, anzahl_zaehlzeiten2):
-		if dissonanz_moeglich(last_interval_quality, anzahl_zaehlzeiten1, anzahl_zaehlzeiten2) == True:
-			stimme = welcher_ton_liegt(anzahl_zaehlzeiten1, anzahl_zaehlzeiten2)
+	def dissonanz_moeglich(self, last_interval_quality, position_im_stueck):
+		# In dieser vereinfachten Fassung ist Dissonanz dann möglich,
+		# wenn genau eine Stimme liegt und das letzte Intervall konsonant war.
+		stimme = harmonie.genau_ein_ton_liegt(position_im_stueck)
+		return (stimme in (1, 2)) and (last_interval_quality == "Konsonanz")
+	def welche_stimme_darf_dissonieren(self, last_interval_quality, position_im_stueck):
+		if self.dissonanz_moeglich(last_interval_quality, position_im_stueck):
+			stimme = harmonie.genau_ein_ton_liegt(position_im_stueck)
 			if stimme == 1:
 				return "2"
 			elif stimme == 2:
-				return "1"	
+				return "1"
+		return None
 	def schrittweises_verlassen(self, midipitch_1, midipitch_2):
 		# Diese Funktion wird nur ausgeführt, nachdem geklärt ist, DASS überhaupt 
 		# schrittweise verlassen werden muss (Dissonanz, Exzerpt S. 3).
@@ -271,12 +287,12 @@ class KpRegeln(object):
 		if stimme == 1:
 			for i in range(0, len(f_dur), 1):
 				if f_dur[i] == midipitch_1:
-					print str(f_dur[i - 1]), str(f_dur[i])
+					print(str(f_dur[i - 1]), str(f_dur[i]))
 					midipitch_1 = f_dur[i - 1]
 		elif stimme == 2:
 			for i in range(0, len(f_dur), 1):
 				if f_dur[i] == midipitch_2:
-					print str(f_dur[i - 1]), str(f_dur[i])
+					print(str(f_dur[i - 1]), str(f_dur[i]))
 					midipitch_2 = f_dur[i - 1]
 		return midipitch_1, midipitch_2
 	"""
@@ -333,7 +349,7 @@ class KpRegeln(object):
 			elif (choral.notenliste[-2][0] - choral.notenliste[1][0]) == -1:
 				vorletztes_intervall = 14
 			else:
-				print "Der Choral endet weder mit einer Tenor- noch mit einer Sopran-Klausel."
+				print("Der Choral endet weder mit einer Tenor- noch mit einer Sopran-Klausel.")
 			contra = choral.notenliste[-1][0] + vorletztes_intervall
 			notenlaenge = choral.laenge() - choral.notenliste[-1][1] - position_im_stueck
 		if position_im_stueck == choral.laenge() - choral.notenliste[-1][1]:
@@ -341,7 +357,7 @@ class KpRegeln(object):
 			contra = midipitch_1 + 12
 			notenlaenge = choral.notenliste[-1][1]
 		if contra == 0:
-			print "get_contra konnte keine mögliche Note finden"
+			print("get_contra konnte keine mögliche Note finden")
 			subtract = kontrapunkt.notenliste.pop(-1)[1]
 			#löscht gleichzeitig das letzte Element & ergibt, wann position_im_stueck nochmal ansetzen muss.
 			if len(harmonie.interval_qualities) > 0:
@@ -402,86 +418,149 @@ while position_im_stueck < laenge_des_stuecks:
 
 # ########## ab hier wird der Kontrapunkt als body-Teil einer MuseScore-Datei ausgegeben.
 
-zeit= time.asctime()
-vorlage = open("/home/philipp/Dokumente/Skripte/python-Skripte/kontraPunktMat/wWIHNS_ohneTpc_mitKontrapunkt.mscx", "r")
-anfang = vorlage.read(5116)
-x = vorlage.read()
-vorlage.close()
+base_path = Path(__file__).parent
+vorlage_pfad = base_path / "wWIHNS_Choral.mscx"
+with open(vorlage_pfad, "r", encoding="utf-8") as vorlage:
+    anfang = vorlage.read(5116)
+    x = vorlage.read()
 ende = x[-3251:]
-
-ausgabe = open("/home/philipp/Dokumente/Skripte/python-Skripte/kontraPunktMat/wWIHNS_mitKontrapunkt"
-+ str(zeit[4:7]) + str(zeit[8:10]) + "." + str(zeit[11:13]) + "-" + str(zeit[14:16]) + "-" + str(zeit[17:19])
-+ ".mscx", "w")
-ausgabe.write(anfang)
 
 museScore = ""
 for i in range(0, len(kontrapunkt.notenliste), 1):
-	laenge = kontrapunkt.notenliste[i][1]
-	if laenge == 1:
-		dots = ""
-		durationType = "eighth"
-	elif laenge == 2:
-		dots = ""
-		durationType = "quarter"
-	elif laenge == 3:
-		dots = "<dots>1</dots>"
-		durationType = "quarter"
-	elif laenge == 4:
-		dots = ""
-		durationType = "half"
-	elif laenge == 6:
-		dots = "<dots>1</dots>"
-		durationType = "half"
-	elif laenge == 8:
-		dots = ""
-		durationType = "whole"
-	museScore = museScore + "<Chord>" + str(dots) + "<durationType>" + str(durationType) + "</durationType><Note><pitch>" + str(kontrapunkt.notenliste[i][0]) + "</pitch></Note></Chord>\n"
-ausgabe.write(museScore)
-ausgabe.write(ende)
-ausgabe.close()
+    laenge = kontrapunkt.notenliste[i][1]
+    if laenge == 1:
+        dots = ""
+        durationType = "eighth"
+    elif laenge == 2:
+        dots = ""
+        durationType = "quarter"
+    elif laenge == 3:
+        dots = "<dots>1</dots>"
+        durationType = "quarter"
+    elif laenge == 4:
+        dots = ""
+        durationType = "half"
+    elif laenge == 6:
+        dots = "<dots>1</dots>"
+        durationType = "half"
+    elif laenge == 8:
+        dots = ""
+        durationType = "whole"
+    museScore = (
+        museScore
+        + "<Chord>"
+        + str(dots)
+        + "<durationType>"
+        + str(durationType)
+        + "</durationType><Note><pitch>"
+        + str(kontrapunkt.notenliste[i][0])
+        + "</pitch></Note></Chord>\n"
+    )
 
-# ########### ab hier wird das Stück abgespielt
+out_pfad = base_path / f"wWIHNS_mitKontrapunkt_{time.strftime('%b%d.%H-%M-%S')}.mscx"
+with open(out_pfad, "w", encoding="utf-8") as ausgabe:
+    ausgabe.write(anfang)
+    ausgabe.write(museScore)
+    ausgabe.write(ende)
+
+"""
+Realtime-Wiedergabe direkt über FluidSynth mit dem PulseAudio-Treiber.
+Dies vermeidet ALSA-Warnungen und nutzt unter PipeWire den pulse-Compat-Layer.
+"""
 
 position_im_stueck = 0
 anzahl_zaehlzeiten_1, anzahl_zaehlzeiten_2 = 0, 0
 
-pa = pyaudio.PyAudio()
-strm = pa.open(
-    format = pyaudio.paInt16,
-    channels = 2, 
-    rate = 44100, 
-    output = True)
-s = []
-fl = fluidsynth.Synth()
-s = numpy.append(s, fl.get_samples(int(44100 * 0.5))) # Initial silence is 0.5 seconds
-sfid = fl.sfload("soundFonts/1276-soft_tenor_sax.sf2")
-fl.program_select(0, sfid, 0, 0)
+# Dauer einer "Zählzeit" in Sekunden (bisher wurden 0.25 s Samples erzeugt)
+tick_seconds = 0.25
 
-for i in range(0, laenge_des_stuecks, 1):
-	if position_im_stueck == anzahl_zaehlzeiten_1:
-		if position_im_stueck != 0:
-			fl.noteoff(0, midipitch_1)
-		notenNummer_1 = choral.get_aktuelleNotenNummer(position_im_stueck)
-		midipitch_1 = choral.notenliste[notenNummer_1][0]
-		fl.noteon(0, midipitch_1, 30)
-		anzahl_zaehlzeiten_1 += choral.notenliste[notenNummer_1][1]
-	if position_im_stueck == anzahl_zaehlzeiten_2:
-		if position_im_stueck != 0:
-			fl.noteoff(0, midipitch_2)
-		notenNummer_2 = kontrapunkt.get_aktuelleNotenNummer(position_im_stueck)
-		midipitch_2 = kontrapunkt.notenliste[notenNummer_2][0]
-		fl.noteon(0, midipitch_2, 30)
-		anzahl_zaehlzeiten_2 += kontrapunkt.notenliste[notenNummer_2][1]
-	s = numpy.append(s, fl.get_samples(int(44100 * 0.25)))
-	position_im_stueck += 1
+fl = None
+midipitch_1 = None
+midipitch_2 = None
 
-fl.noteoff(0, midipitch_1)
-fl.noteoff(0, midipitch_2)
-s = numpy.append(s, fl.get_samples(44100 * 1)) # Decay of chord is held for 1 second
-fl.delete()
-samps = fluidsynth.raw_audio_string(s)
-#print len(samps)
-strm.write(samps) #dieser Befehl spielt die aufgezeichneten Samples ab.
+try:
+    # Synth initialisieren und SoundFont laden
+    fl = fluidsynth.Synth(samplerate=44100.0, gain=1.0)
+    # Standard: lokaler SoundFont, sonst systemweiter FluidR3
+    sf_local = (base_path / "soundFonts/1276-soft_tenor_sax.sf2").resolve()
+    sf_path = str(sf_local) if sf_local.exists() else \
+              "/usr/share/sounds/sf2/FluidR3_GM.sf2"
+    sfid = fl.sfload(sf_path)
+    # Preset wählen: zuerst Piano (0), wenn nicht vorhanden Tenor Sax (65)
+    preset_selected = False
+    try:
+        fl.program_select(0, sfid, 0, 0)
+        preset_selected = True
+    except Exception:
+        pass
+    if not preset_selected:
+        try:
+            fl.program_select(0, sfid, 0, 65)
+            preset_selected = True
+        except Exception:
+            pass
+
+    # Audioausgabe starten: bevorzugt PulseAudio
+    try:
+        fl.start(driver="pulseaudio")
+        print("FluidSynth: PulseAudio-Treiber aktiv.")
+    except Exception as e:
+        print("Warnung: PulseAudio konnte nicht gestartet werden (", e, ") – versuche PipeWire …")
+        fl.start(driver="pipewire")
+        print("FluidSynth: PipeWire-Treiber aktiv.")
+
+    # Sicherheitshalber Lautstärke hochziehen
+    try:
+        fl.cc(0, 7, 127)   # Volume
+        fl.cc(0, 11, 127)  # Expression
+    except Exception:
+        pass
+
+    # Zeitgesteuerte Echtzeit-Schleife
+    t0 = time.perf_counter()
+    for i in range(0, laenge_des_stuecks, 1):
+        if position_im_stueck == anzahl_zaehlzeiten_1:
+            if position_im_stueck != 0 and midipitch_1 is not None:
+                fl.noteoff(0, midipitch_1)
+            notenNummer_1 = choral.get_aktuelleNotenNummer(position_im_stueck)
+            midipitch_1 = choral.notenliste[notenNummer_1][0]
+            fl.noteon(0, midipitch_1, 100)
+            anzahl_zaehlzeiten_1 += choral.notenliste[notenNummer_1][1]
+
+        if position_im_stueck == anzahl_zaehlzeiten_2:
+            if position_im_stueck != 0 and midipitch_2 is not None:
+                fl.noteoff(0, midipitch_2)
+            notenNummer_2 = kontrapunkt.get_aktuelleNotenNummer(position_im_stueck)
+            midipitch_2 = kontrapunkt.notenliste[notenNummer_2][0]
+            fl.noteon(0, midipitch_2, 100)
+            anzahl_zaehlzeiten_2 += kontrapunkt.notenliste[notenNummer_2][1]
+
+        # Nächsten Tick terminieren und bis dahin schlafen
+        position_im_stueck += 1
+        next_time = t0 + position_im_stueck * tick_seconds
+        now = time.perf_counter()
+        sleep_time = next_time - now
+        if sleep_time > 0:
+            time.sleep(sleep_time)
+
+    # Ausklang
+    try:
+        if midipitch_1 is not None:
+            fl.noteoff(0, midipitch_1)
+        if midipitch_2 is not None:
+            fl.noteoff(0, midipitch_2)
+    except Exception:
+        pass
+    time.sleep(1.0)
+
+except KeyboardInterrupt:
+    print("Abbruch per Strg+C während der Audioausgabe.")
+finally:
+    try:
+        if fl is not None:
+            fl.delete()
+    except Exception:
+        pass
 
 
 
