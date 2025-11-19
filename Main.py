@@ -14,11 +14,10 @@ def main() -> int:
 
     # 1) Domänenobjekte aufbauen
     choral = ctrl.build_choral()
-    kontrapunkt, _harmonie = ctrl.generate_contrapunt(choral)
+    kontrapunkt = ctrl.generate_contrapunt(choral)
 
     # 2) Export
-    out_file = ctrl.export_musescore(kontrapunkt)
-    print(f"MuseScore-Datei geschrieben: {out_file}")
+    ctrl.export_musescore(kontrapunkt)
 
     # 3) Wiedergabe
     ctrl.playback_realtime(choral, kontrapunkt)
