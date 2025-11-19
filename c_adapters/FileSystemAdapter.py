@@ -1,71 +1,53 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""FileSystemAdapter: Kapselt alle Dateisystem-Zugriffe.
+"""FileSystemAdapter: Kapselt generische Dateisystem-Zugriffe.
 
-Gemäß Clean Architecture sollen Komponenten außerhalb der Adapter-Schicht
-keine direkten Dateioperationen durchführen. Dieser Adapter bündelt:
-- Lesen der MuseScore-Vorlage (Head/Tail anhand fester Offsets)
-- Erzeugen des Ausgabepfads und Schreiben der Ausgabedatei
-- Auswahl eines geeigneten SoundFont-Pfads (lokal vs. systemweit)
+Gemäß Clean Architecture gehören framework-/format-spezifische Details
+(wie das konkrete MuseScore-XML) nicht hierher. Dieser Adapter stellt
+allgemeine FS-Helfer bereit, die von äußeren Schichten genutzt werden
+können (z. B. Lesen/Schreiben von Dateien, Verzeichnisse anlegen,
+Pfade relativ zum Projekt-Root auflösen).
 """
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
 from typing import Tuple
 
-from .fs_config import FileSystemConfig
 
 
 class FileSystemAdapter:
-    def __init__(self, base_path: Path, config: FileSystemConfig | None = None) -> None:
+    def __init__(self, base_path: Path) -> None:
         # base_path zeigt auf das Projekt-Root
         self.base_path = base_path
-        self.config = config or FileSystemConfig()
 
-    # --- MuseScore-Vorlage ---
-    def _template_path(self) -> Path:
-        return (self.base_path / self.config.score_template_relpath).resolve()
+    # --- Pfadfunktionen ---
+    def resolve_path(self, rel_or_abs: Path) -> Path:
+        """Löst einen Pfad relativ zum Projekt-Root auf, falls er nicht absolut ist."""
+        return rel_or_abs if rel_or_abs.is_absolute() else (self.base_path / rel_or_abs).resolve()
 
-    def read_musescore_template(self) -> Tuple[str, str]:
-        """Liest den Kopf- und End-Teil aus der MuseScore-Vorlage.
-
-        Rückgabe: (head_str, tail_str)
-        """
-        tpl = self._template_path()
-        with open(tpl, "r", encoding="utf-8") as f:
-            head = f.read(self.config.score_head_bytes)
+    # --- Lesen/Schreiben ---
+    def read_head_tail(self, file_path: Path, head_bytes: int, tail_bytes: int, encoding: str = "utf-8") -> Tuple[str, str]:
+        """Liest die ersten head_bytes und die letzten tail_bytes einer Textdatei."""
+        p = self.resolve_path(file_path)
+        with open(p, "r", encoding=encoding) as f:
+            head = f.read(head_bytes)
             remainder = f.read()
-        tail = remainder[-self.config.score_tail_bytes :]
+        tail = remainder[-tail_bytes:]
         return head, tail
 
-    # --- Ausgabedatei ---
-    def ensure_output_dir(self) -> Path:
-        out_dir = self.base_path / self.config.score_out_dirname
-        out_dir.mkdir(parents=True, exist_ok=True)
-        return out_dir
+    def ensure_dir(self, directory: Path) -> Path:
+        """Stellt sicher, dass ein Verzeichnis existiert, und gibt den Pfad zurück."""
+        d = self.resolve_path(directory)
+        d.mkdir(parents=True, exist_ok=True)
+        return d
 
-    def build_output_path(self) -> Path:
-        out_dir = self.ensure_output_dir()
-        name = f"{self.config.score_filename_prefix}{time.strftime('%b%d.%H-%M-%S')}.mscx"
-        return out_dir / name
-
-    def write_musescore_file(self, body_xml: str) -> Path:
-        """Schreibt die MuseScore-Datei und gibt den Pfad zurück."""
-        head, tail = self.read_musescore_template()
-        out_path = self.build_output_path()
-        with open(out_path, "w", encoding="utf-8") as out:
-            out.write(head)
-            out.write(body_xml)
-            out.write(tail)
-        return out_path
-
-    # --- SoundFont-Auswahl ---
-    def choose_soundfont_path(self) -> Path:
-        """Wählt bevorzugt die projektlokale SoundFont-Datei, sonst den System-Pfad."""
-        local = (self.base_path / self.config.sf_local_relpath).resolve()
-        if local.exists():
-            return local
-        return self.config.sf_system_path
+    def write_text(self, file_path: Path, content: str, encoding: str = "utf-8") -> Path:
+        """Schreibt Textinhalt in eine Datei, legt Elternverzeichnisse bei Bedarf an, und gibt den Pfad zurück."""
+        p = self.resolve_path(file_path)
+        parent = p.parent
+        parent.mkdir(parents=True, exist_ok=True)
+        with open(p, "w", encoding=encoding) as out:
+            out.write(content)
+        return p

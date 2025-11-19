@@ -5,18 +5,15 @@
 
 Dieser Controller kapselt die Orchestrierung der Anwendung:
 - Generierung des Kontrapunkts aus einer gegebenen Choral-Melodie
-- Export nach MuseScore
-- Echtzeit-Wiedergabe über FluidSynth (PulseAudio, Fallback PipeWire)
+- Export über einen Score-Export-Port
+- Wiedergabe über einen Playback-Port (Driver wird injiziert)
 
-Dadurch bleibt main.py schlank und enthält nur noch den Programmstart.
+Dadurch bleibt main.py schlank und die Adapter-Schicht frei von Driver-Details.
 """
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
-
-import fluidsynth
 
 from a_domain.Melodie import Melodie
 from a_domain.HarmonischeStruktur import HarmonischeStruktur
@@ -24,16 +21,27 @@ from a_domain.KpRegeln import KpRegeln
 from a_domain.Tonleitern import f_dur
 from .config import AppConfig
 from .FileSystemAdapter import FileSystemAdapter
-from .fs_config import FileSystemConfig
+from .ports.score_export_port import ScoreExportPort
+from .ports.playback_port import CounterpointPlaybackPort, PlaybackSettings
+from .MidiAdapter import MidiAdapter
 
 
 class TwoPartCounterpointController:
-    def __init__(self, base_path: Path | None = None, config: AppConfig | None = None) -> None:
+    def __init__(self, base_path: Path | None = None, config: AppConfig | None = None,
+                 score_exporter: ScoreExportPort | None = None,
+                 playback_port: CounterpointPlaybackPort | None = None,
+                 midi_adapter: MidiAdapter | None = None) -> None:
         # base_path zeigt auf das Projekt-Root (eine Ebene über c_adapters)
         self.base_path = base_path or Path(__file__).resolve().parent.parent
         self.config = config or AppConfig()
         # FileSystem-Adapter für alle Dateioperationen
-        self.fs = FileSystemAdapter(self.base_path, FileSystemConfig())
+        self.fs = FileSystemAdapter(self.base_path)
+        # Port für Partitur-Export (wird in Main per DI gesetzt)
+        self.score_exporter = score_exporter
+        # Port für Wiedergabe (Driver, wird in Main per DI gesetzt)
+        self.playback_port = playback_port
+        # Adapter zum Bau des Playback-Requests (neutral)
+        self.midi_adapter = midi_adapter or MidiAdapter(self.base_path, self.fs)
 
     def build_choral(self):
         return Melodie(self.config.wWIHNS_1, f_dur)
@@ -89,120 +97,25 @@ class TwoPartCounterpointController:
 
         return kontrapunkt
 
-    def export_musescore(self, kontrapunkt: Melodie) -> Path:
-        """Schreibt eine MuseScore-Datei mit dem erzeugten Kontrapunkt und gibt den Pfad zurück.
-
-        Die Ausgabe wird im Unterordner "Kontrapunkte" abgelegt.
-        """
-        # Body-XML aus den Noten erzeugen
-        museScore = ""
-        for i in range(0, len(kontrapunkt.notenliste), 1):
-            laenge = kontrapunkt.notenliste[i][1]
-            durationType, dots = self.config.score_duration_map.get(laenge, ("quarter", ""))
-            museScore = (
-                museScore
-                + "<Chord>"
-                + str(dots)
-                + "<durationType>"
-                + str(durationType)
-                + "</durationType><Note><pitch>"
-                + str(kontrapunkt.notenliste[i][0])
-                + "</pitch></Note></Chord>\n"
-            )
-        # Datei über den FileSystemAdapter schreiben
-        out_pfad = self.fs.write_musescore_file(museScore)
+    def export_musescore(self, kontrapunkt: Melodie):
+        """Exportiert den Kontrapunkt über den konfigurierten Score-Exporter und gibt den Pfad zurück."""
+        if self.score_exporter is None:
+            raise RuntimeError("Kein ScoreExportPort konfiguriert. Bitte in main einen Exporter injizieren.")
+        out_pfad = self.score_exporter.export_melody(kontrapunkt)
         print(f"MuseScore-Datei geschrieben: {out_pfad}")
-        return out_pfad
 
-    def playback_realtime(self, choral: Melodie, kontrapunkt: Melodie):
-        """Spielt Choral und Kontrapunkt in Echtzeit mit FluidSynth über PulseAudio (Fallback PipeWire)."""
-        position_im_stueck = 0
-        anzahl_zaehlzeiten_1, anzahl_zaehlzeiten_2 = 0, 0
-        tick_seconds = self.config.tick_seconds
+    def playback_realtime(self, choral: Melodie, kontrapunkt: Melodie, settings: PlaybackSettings) -> None:
+        """Spielt Choral und Kontrapunkt über den injizierten Playback-Port ab.
 
-        fl = None
-        midipitch_1 = None
-        midipitch_2 = None
+        Der Controller kennt keine FluidSynth-Details mehr. Er baut lediglich
+        einen neutralen PlaybackRequest über den MidiAdapter und übergibt ihn
+        an den Playback-Port (Driver).
+        """
+        if self.playback_port is None:
+            raise RuntimeError("Kein CounterpointPlaybackPort konfiguriert. Bitte in main einen Playback-Driver injizieren.")
+        if self.midi_adapter is None:
+            # Sollte nie passieren, da im Konstruktor ein Default gebaut wird
+            self.midi_adapter = MidiAdapter(self.base_path, self.fs)
 
-        try:
-            # Synth initialisieren und SoundFont laden
-            fl = fluidsynth.Synth(samplerate=self.config.synth_samplerate, gain=self.config.synth_gain)
-            # SoundFont-Pfad über FileSystemAdapter wählen
-            sf_path = str(self.fs.choose_soundfont_path())
-            sfid = fl.sfload(sf_path)
-            # Preset-Reihenfolge aus Konfiguration
-            preset_selected = False
-            for bank, program in self.config.sf_presets:
-                try:
-                    fl.program_select(0, sfid, bank, program)
-                    preset_selected = True
-                    break
-                except Exception:
-                    continue
-
-            # Audioausgabe starten: bevorzugt PulseAudio
-            last_err = None
-            for drv in self.config.iter_audio_drivers():
-                try:
-                    fl.start(driver=drv)
-                    print(f"FluidSynth: {drv}-Treiber aktiv.")
-                    last_err = None
-                    break
-                except Exception as e:
-                    last_err = e
-                    print(f"Warnung: {drv} konnte nicht gestartet werden ({e}).")
-            if last_err is not None:
-                raise last_err
-
-            # Lautstärke sicherheitshalber hochziehen
-            try:
-                fl.cc(0, 7, self.config.midi_cc_volume)
-                fl.cc(0, 11, self.config.midi_cc_expression)
-            except Exception:
-                pass
-
-            # Zeitgesteuerte Echtzeit-Schleife
-            t0 = time.perf_counter()
-            laenge_des_stuecks = choral.laenge()
-            for _ in range(0, laenge_des_stuecks, 1):
-                if position_im_stueck == anzahl_zaehlzeiten_1:
-                    if position_im_stueck != 0 and midipitch_1 is not None:
-                        fl.noteoff(0, midipitch_1)
-                    notenNummer_1 = choral.get_aktuelleNotenNummer(position_im_stueck)
-                    midipitch_1 = choral.notenliste[notenNummer_1][0]
-                    fl.noteon(0, midipitch_1, self.config.midi_velocity)
-                    anzahl_zaehlzeiten_1 += choral.notenliste[notenNummer_1][1]
-
-                if position_im_stueck == anzahl_zaehlzeiten_2:
-                    if position_im_stueck != 0 and midipitch_2 is not None:
-                        fl.noteoff(0, midipitch_2)
-                    notenNummer_2 = kontrapunkt.get_aktuelleNotenNummer(position_im_stueck)
-                    midipitch_2 = kontrapunkt.notenliste[notenNummer_2][0]
-                    fl.noteon(0, midipitch_2, self.config.midi_velocity)
-                    anzahl_zaehlzeiten_2 += kontrapunkt.notenliste[notenNummer_2][1]
-
-                position_im_stueck += 1
-                next_time = t0 + position_im_stueck * tick_seconds
-                now = time.perf_counter()
-                sleep_time = next_time - now
-                if sleep_time > 0:
-                    time.sleep(sleep_time)
-
-            # Ausklang
-            try:
-                if midipitch_1 is not None:
-                    fl.noteoff(0, midipitch_1)
-                if midipitch_2 is not None:
-                    fl.noteoff(0, midipitch_2)
-            except Exception:
-                pass
-            time.sleep(self.config.fadeout_seconds)
-
-        except KeyboardInterrupt:
-            print("Abbruch per Strg+C während der Audioausgabe.")
-        finally:
-            try:
-                if fl is not None:
-                    fl.delete()
-            except Exception:
-                pass
+        request = self.midi_adapter.build_request(choral, kontrapunkt, settings)
+        self.playback_port.play(request)
