@@ -5,9 +5,9 @@ from __future__ import annotations
 
 from a_domain.Melodie import Melodie
 from b_application.use_case_interactor import UseCaseInteractor
-from .config import AppConfig
-from .ports.score_export_port import ScoreExportPort
-from .ports.playback_port import CounterpointPlaybackPort
+from c_adapters.config import AppConfig
+from c_adapters.ports.score_export_port import ScoreExportPort
+from c_adapters.ports.playback_port import CounterpointPlaybackPort
 
 class TwoPartCounterpointController:
     def __init__(self,
