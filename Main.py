@@ -36,7 +36,7 @@ def main() -> int:
 
     # 1) Domänenobjekte aufbauen
     choral = ctrl.build_choral()
-    kontrapunkt = ctrl.generate_contrapunt(choral)
+    kontrapunkt = ctrl.generate_counterpoint(choral)
 
     # 2) Export
     ctrl.export_musescore(kontrapunkt)
