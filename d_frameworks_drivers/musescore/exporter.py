@@ -27,23 +27,26 @@ class MuseScoreFileExporter(ScoreExportPort):
                  fs: FileSystemAdapter | None = None) -> None:
         self.project_root = project_root
         self.app_cfg = app_cfg
-        self.ms = ms_cfg or MuseScoreConfig()
+        self.musescore = ms_cfg or MuseScoreConfig()
         # FileSystem-Adapter für alle Dateioperationen (Clean Architecture)
         self.fs = fs or FileSystemAdapter(project_root)
 
     # --- interne Helfer ---
     def _template_path(self) -> Path:
         # Unterstützt absolute Pfade in der Config sowie relative (vom Projekt-Root aus)
-        return self.fs.resolve_path(self.ms.template_relpath)
+        return self.fs.resolve_path(self.musescore.template_relpath)
 
     def _read_template_parts(self) -> tuple[str, str]:
-        return self.fs.read_head_tail(self._template_path(), self.ms.head_bytes, self.ms.tail_bytes)
+        file_content = self.fs.read(self._template_path())
+        head = file_content[0:self.musescore.head_bytes]
+        tail = file_content[-self.musescore.tail_bytes:]
+        return head, tail
 
     def _ensure_out_dir(self) -> Path:
-        return self.fs.ensure_dir(Path(self.ms.out_dirname))
+        return self.fs.ensure_dir(Path(self.musescore.out_dirname))
 
     def _build_out_path(self) -> Path:
-        name = f"{self.ms.filename_prefix}{time.strftime('%b%d.%H-%M-%S')}.mscx"
+        name = f"{self.musescore.filename_prefix}{time.strftime('%b%d.%H-%M-%S')}.mscx"
         return (self._ensure_out_dir() / name)
 
     def _melody_to_body_xml(self, melody: Melodie) -> str:

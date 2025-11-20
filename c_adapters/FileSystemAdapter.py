@@ -27,15 +27,11 @@ class FileSystemAdapter:
         """Löst einen Pfad relativ zum Projekt-Root auf, falls er nicht absolut ist."""
         return rel_or_abs if rel_or_abs.is_absolute() else (self.base_path / rel_or_abs).resolve()
 
-    # --- Lesen/Schreiben ---
-    def read_head_tail(self, file_path: Path, head_bytes: int, tail_bytes: int, encoding: str = "utf-8") -> Tuple[str, str]:
-        """Liest die ersten head_bytes und die letzten tail_bytes einer Textdatei."""
-        p = self.resolve_path(file_path)
-        with open(p, "r", encoding=encoding) as f:
-            head = f.read(head_bytes)
-            remainder = f.read()
-        tail = remainder[-tail_bytes:]
-        return head, tail
+    # --- Lesen ---
+    def read(self, file_path: Path, encoding: str = "utf-8") -> str:
+        path = self.resolve_path(file_path)
+        with open(path, "r", encoding=encoding) as file:
+            return file.read()
 
     def ensure_dir(self, directory: Path) -> Path:
         """Stellt sicher, dass ein Verzeichnis existiert, und gibt den Pfad zurück."""
@@ -43,6 +39,7 @@ class FileSystemAdapter:
         d.mkdir(parents=True, exist_ok=True)
         return d
 
+    # --- Schreiben ---
     def write_text(self, file_path: Path, content: str, encoding: str = "utf-8") -> Path:
         """Schreibt Textinhalt in eine Datei, legt Elternverzeichnisse bei Bedarf an, und gibt den Pfad zurück."""
         p = self.resolve_path(file_path)
