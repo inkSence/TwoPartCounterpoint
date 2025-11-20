@@ -7,6 +7,14 @@ from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
 from a_domain.Melodie import Melodie
+from typing import Sequence, Optional
+
+# Forward-Ref, um zirkuläre Imports zu vermeiden
+try:
+    from b_application.build_note_events_use_case import NoteEvent
+except Exception:  # pragma: no cover - zur Importzeit evtl. noch nicht vorhanden
+    class NoteEvent:  # type: ignore[misc]
+        ...
 
 
 @dataclass(frozen=True)
@@ -51,6 +59,9 @@ class PlaybackRequest:
 
     # Allgemeine Abspiel-Parameter
     settings: PlaybackSettings
+
+    # Optional: Vorgeplante Ereignisse (Note-On/Off) in Ticks
+    events: Optional[Sequence[NoteEvent]] = None
 
 
 class CounterpointPlaybackPort(ABC):

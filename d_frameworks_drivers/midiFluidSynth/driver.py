@@ -46,13 +46,6 @@ class FluidSynthPlaybackDriver(CounterpointPlaybackPort):
             ) from e
 
         settings = request.settings
-        choral = request.choral
-        kontrapunkt = request.kontrapunkt
-
-        position_im_stueck = 0
-        anzahl_zaehlzeiten_1, anzahl_zaehlzeiten_2 = 0, 0
-        midipitch_1 = None
-        midipitch_2 = None
         fl = None
 
         try:
@@ -104,41 +97,25 @@ class FluidSynthPlaybackDriver(CounterpointPlaybackPort):
             except Exception:
                 pass
 
-            # Zeitgesteuerte Echtzeit-Schleife
+            # Zeitgesteuerte Echtzeit-Schleife (nur noch Event-basiert)
+            if not request.events:
+                raise ValueError(
+                    "PlaybackRequest.events fehlen – bitte den MidiAdapter/Sequencer verwenden."
+                )
+
             t0 = time.perf_counter()
-            laenge_des_stuecks = choral.laenge()
-            for _ in range(0, laenge_des_stuecks, 1):
-                if position_im_stueck == anzahl_zaehlzeiten_1:
-                    if position_im_stueck != 0 and midipitch_1 is not None:
-                        fl.noteoff(0, midipitch_1)
-                    notenNummer_1 = choral.get_aktuelleNotenNummer(position_im_stueck)
-                    midipitch_1 = choral.notenliste[notenNummer_1][0]
-                    fl.noteon(0, midipitch_1, settings.midi_velocity)
-                    anzahl_zaehlzeiten_1 += choral.notenliste[notenNummer_1][1]
-
-                if position_im_stueck == anzahl_zaehlzeiten_2:
-                    if position_im_stueck != 0 and midipitch_2 is not None:
-                        fl.noteoff(0, midipitch_2)
-                    notenNummer_2 = kontrapunkt.get_aktuelleNotenNummer(position_im_stueck)
-                    midipitch_2 = kontrapunkt.notenliste[notenNummer_2][0]
-                    fl.noteon(0, midipitch_2, settings.midi_velocity)
-                    anzahl_zaehlzeiten_2 += kontrapunkt.notenliste[notenNummer_2][1]
-
-                position_im_stueck += 1
-                next_time = t0 + position_im_stueck * settings.tick_seconds
+            for ev in request.events:
+                target = t0 + ev.time_tick * settings.tick_seconds
                 now = time.perf_counter()
-                sleep_time = next_time - now
+                sleep_time = target - now
                 if sleep_time > 0:
                     time.sleep(sleep_time)
+                if ev.on:
+                    fl.noteon(0, ev.pitch, settings.midi_velocity)
+                else:
+                    fl.noteoff(0, ev.pitch)
 
             # Ausklang
-            try:
-                if midipitch_1 is not None:
-                    fl.noteoff(0, midipitch_1)
-                if midipitch_2 is not None:
-                    fl.noteoff(0, midipitch_2)
-            except Exception:
-                pass
             time.sleep(max(0.0, settings.fadeout_seconds))
 
         except KeyboardInterrupt:
