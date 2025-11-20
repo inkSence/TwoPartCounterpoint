@@ -13,8 +13,10 @@ Controller-Schicht frei von FluidSynth-Details (Clean Architecture).
 import time
 from pathlib import Path
 
-from c_adapters.ports.playback_port import CounterpointPlaybackPort, PlaybackRequest
+from c_adapters.ports.playback_port import CounterpointPlaybackPort
+from b_application.build_note_events_use_case import NoteEvent
 from .config import MidiFluidSynthConfig
+import fluidsynth
 
 
 class FluidSynthPlaybackDriver(CounterpointPlaybackPort):
@@ -51,19 +53,10 @@ class FluidSynthPlaybackDriver(CounterpointPlaybackPort):
             "Kein SoundFont gefunden. Lege eine .sf2 in d_frameworks_drivers/midiFluidSynth/soundFonts/."
         )
 
-    # --- Port-Implementierung ---
-    def play(self, request: PlaybackRequest) -> None:  # noqa: C901 (Komplexität ok, da eng gekapselt)
-        try:
-            import fluidsynth  # lokale Abhängigkeit nur im Driver
-        except Exception as e:  # pragma: no cover - Importfehler klar benennen
-            raise RuntimeError(
-                "pyfluidsynth/fluidsynth konnte nicht importiert werden. Bitte installieren: 'pip install pyfluidsynth'."
-            ) from e
+    def configureFluidSynth(self):
 
         # Wiedergabe-Parameter on-demand aus der Driver-Konfiguration ableiten
         settings = self.cfg.to_settings()
-        fl = None
-
         try:
             # Synth initialisieren
             fl = fluidsynth.Synth(samplerate=settings.samplerate, gain=settings.gain)
@@ -85,7 +78,7 @@ class FluidSynthPlaybackDriver(CounterpointPlaybackPort):
                     preset_selected = True
                     break
                 except Exception:
-                    continue
+                    print("Soundfont didnt work")
             if not preset_selected:
                 # Fallback: GM Piano
                 try:
@@ -114,9 +107,19 @@ class FluidSynthPlaybackDriver(CounterpointPlaybackPort):
             except Exception:
                 pass
 
+            return fl
+        except Exception:
+            print("Something went wrong configuring Midi-Driver")
+
+
+    # --- Port-Implementierung ---
+    def play(self, events : list[NoteEvent]) -> None:
+        fl = self.configureFluidSynth()
+        settings = self.cfg.to_settings()
+        try:
             # Zeitgesteuerte Echtzeit-Schleife (Event-basiert)
             t0 = time.perf_counter()
-            for ev in request.events:
+            for ev in events:
                 target = t0 + ev.time_tick * settings.tick_seconds
                 now = time.perf_counter()
                 sleep_time = target - now

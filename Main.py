@@ -1,20 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""Einstiegspunkt und Orchestrierung der Anwendung.
-
-MuseScore-spezifische Details liegen in d_frameworks_drivers.musescore.
-Hier wird die konkrete Export-Implementierung erstellt und über einen
-Port (ScoreExportPort) in den Controller injiziert.
-"""
-
 from pathlib import Path
 
 from c_adapters.Controller import TwoPartCounterpointController
 from c_adapters.config import AppConfig
 from c_adapters.FileSystemAdapter import FileSystemAdapter
 from c_adapters.MuseScoreXmlAdapter import MuseScoreXmlAdapter
-from c_adapters.MidiAdapter import MidiAdapter
 from b_application.generate_counterpoint_use_case import GenerateCounterpointUseCase
 from b_application.build_note_events_use_case import BuildNoteEventsUseCase
 from b_application.use_case_interactor import UseCaseInteractor
@@ -25,7 +17,6 @@ from d_frameworks_drivers.musescore.config import MuseScoreConfig
 
 def main() -> int:
     base = Path(__file__).resolve().parent
-    # Zentrale Konfigurationen
     app_cfg = AppConfig()
     ms_cfg = MuseScoreConfig()
 
@@ -41,15 +32,10 @@ def main() -> int:
     sequencer = BuildNoteEventsUseCase()
     interactor = UseCaseInteractor(generate_uc=generate_uc, sequencer=sequencer)
 
-    # Adapter für Playback-Request
-    midi_adapter = MidiAdapter()
-
-    # Controller instanziieren (liefert Pfad- und Hilfsfunktionen)
     ctrl = TwoPartCounterpointController(
         config=app_cfg,
         score_exporter=score_exporter,
         playback_port=playback_driver,
-        midi_adapter=midi_adapter,
         interactor=interactor,
     )
 

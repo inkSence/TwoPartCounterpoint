@@ -10,13 +10,7 @@ import xml.etree.ElementTree as ET
 class MuseScoreXmlAdapter:
     """MuseScore-spezifische XML-Helfer (ElementTree-basiert).
 
-    Diese Klasse kapselt wiederkehrende Operationen auf .mscx-Dateien:
-    - Laden/Schreiben
-    - Suchen von Staff/Measure
-    - Bestimmen eines Einfüge-Indizes (z. B. nach <TimeSig>)
-    - Bereichsbereinigung bis zur nächsten <BarLine>
-    - Erzeugen von <Chord>-Knoten aus Domänen-Daten
-    - Sicherstellen einer abschließenden <BarLine>
+    Diese Klasse kapselt wiederkehrende Operationen auf .mscx-Dateien.
     """
 
     # --- IO ---

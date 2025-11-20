@@ -34,6 +34,3 @@ class AppConfig:
         8: ("whole", ""),
     }
 
-    # Hinweis: Wiedergabe-/Synth-Parameter sind in der Driver-Schicht
-    # d_frameworks_drivers.midiFluidSynth.config.MidiFluidSynthConfig
-    # definiert. Diese AppConfig enthält bewusst keine Audio-/Synth-Werte.
