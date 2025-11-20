@@ -8,13 +8,15 @@ from abc import ABC, abstractmethod
 
 from a_domain.Melodie import Melodie
 from typing import Sequence, Optional
+import logging
+logging.basicConfig(level=logging.INFO)
 
 # Forward-Ref, um zirkuläre Imports zu vermeiden
 try:
     from b_application.build_note_events_use_case import NoteEvent
 except Exception:  # pragma: no cover - zur Importzeit evtl. noch nicht vorhanden
     class NoteEvent:  # type: ignore[misc]
-        ...
+        logging.exception("Unable to import NoteEvent")
 
 
 @dataclass(frozen=True)

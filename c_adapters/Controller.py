@@ -60,11 +60,16 @@ class TwoPartCounterpointController:
         """Spielt Choral und Kontrapunkt über den injizierten Playback-Port ab.
 
         Der Controller kennt keine FluidSynth-Details mehr. Er baut lediglich
-        einen neutralen PlaybackRequest über den MidiAdapter und übergibt ihn
-        an den Playback-Port (Driver).
+        einen neutralen PlaybackRequest über den MidiAdapter. Die nötigen
+        Note-Events werden in der Application-Schicht (UseCaseInteractor)
+        erzeugt und hier übergeben. Anschließend wird der Request an den
+        Playback-Port (Driver) übergeben.
         """
         if self.playback_port is None:
             raise RuntimeError("Kein CounterpointPlaybackPort konfiguriert. Bitte in main einen Playback-Driver injizieren.")
 
-        request = self.midi_adapter.build_request(choral, kontrapunkt, settings)
+        # Events zentral im Interactor erzeugen
+        events = self.interactor.build_note_events(choral, kontrapunkt)
+        # Request mit den erzeugten Events bauen
+        request = self.midi_adapter.build_request(choral, kontrapunkt, settings, events=events)
         self.playback_port.play(request)
