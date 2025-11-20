@@ -27,8 +27,6 @@ class Melodie(object):
                 if anzahl_zaehlzeiten > position_im_stueck:
                     return i
             return len(self.notenliste)
-            print("Offensichtlich ist position_im_stueck >= anzahl zählzeiten.")
-            print("Damit liegt die Position außerhalb der Notenliste.")
 
     def anzahl_zaehlzeiten_bis_zur_note(self, notennummer):
         if self.notenliste == []:

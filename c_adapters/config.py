@@ -10,8 +10,6 @@ einfach anpassen lassen.
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Iterable
 
 
 class AppConfig:
@@ -36,22 +34,6 @@ class AppConfig:
         8: ("whole", ""),
     }
 
-    # --- Audio-Wiedergabe (FluidSynth Realtime) ---
-    synth_samplerate: float = 44100.0
-    synth_gain: float = 1.0
-    preferred_driver: str = "pulseaudio"
-    fallback_drivers: list[str] = ["pipewire"]
-    midi_velocity: int = 100
-    midi_cc_volume: int = 127  # CC7
-    midi_cc_expression: int = 127  # CC11
-    tick_seconds: float = 0.25
-    fadeout_seconds: float = 1.0
-
-    # SoundFont-Preset-Reihenfolge (fachliche Auswahl, keine Pfade)
-    # Preset-Reihenfolge: Liste von (bank, program)
-    sf_presets: list[tuple[int, int]] = [(0, 0), (0, 65)]  # Piano, Tenor Sax
-
-    def iter_audio_drivers(self) -> Iterable[str]:
-        yield self.preferred_driver
-        for drv in self.fallback_drivers:
-            yield drv
+    # Hinweis: Wiedergabe-/Synth-Parameter sind in der Driver-Schicht
+    # d_frameworks_drivers.midiFluidSynth.config.MidiFluidSynthConfig
+    # definiert. Diese AppConfig enthält bewusst keine Audio-/Synth-Werte.

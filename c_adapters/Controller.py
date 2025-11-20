@@ -18,7 +18,6 @@ from pathlib import Path
 from a_domain.Melodie import Melodie
 from a_domain.Tonleitern import f_dur
 from .config import AppConfig
-from .FileSystemAdapter import FileSystemAdapter
 from .ports.score_export_port import ScoreExportPort
 from .ports.playback_port import CounterpointPlaybackPort, PlaybackSettings
 from .MidiAdapter import MidiAdapter
@@ -33,14 +32,12 @@ class TwoPartCounterpointController:
         # base_path zeigt auf das Projekt-Root (eine Ebene über c_adapters)
         self.base_path = base_path or Path(__file__).resolve().parent.parent
         self.config = config or AppConfig()
-        # FileSystem-Adapter für alle Dateioperationen
-        self.fs = FileSystemAdapter(self.base_path)
         # Port für Partitur-Export (wird in Main per DI gesetzt)
         self.score_exporter = score_exporter
         # Port für Wiedergabe (Driver, wird in Main per DI gesetzt)
         self.playback_port = playback_port
         # Adapter zum Bau des Playback-Requests (neutral)
-        self.midi_adapter = midi_adapter or MidiAdapter(self.base_path)
+        self.midi_adapter = midi_adapter or MidiAdapter()
         # Use-Case-Interactor (Application-Schicht)
         self.interactor = interactor or UseCaseInteractor()
 
@@ -68,9 +65,6 @@ class TwoPartCounterpointController:
         """
         if self.playback_port is None:
             raise RuntimeError("Kein CounterpointPlaybackPort konfiguriert. Bitte in main einen Playback-Driver injizieren.")
-        if self.midi_adapter is None:
-            # Sollte nie passieren, da im Konstruktor ein Default gebaut wird
-            self.midi_adapter = MidiAdapter(self.base_path)
 
         request = self.midi_adapter.build_request(choral, kontrapunkt, settings)
         self.playback_port.play(request)

@@ -12,15 +12,15 @@ abgearbeitet werden kann.
 
 from __future__ import annotations
 
-from pathlib import Path
 
 from a_domain.Melodie import Melodie
 from .ports.playback_port import PlaybackRequest, PlaybackSettings
 
 
 class MidiAdapter:
-    def __init__(self, base_path: Path) -> None:
-        self.base_path = base_path
+    def __init__(self) -> None:
+        # Keine Zustandsdaten notwendig – Adapter baut nur DTOs.
+        pass
 
     def build_request(self, choral: Melodie, kontrapunkt: Melodie, settings: PlaybackSettings) -> PlaybackRequest:
         """Erstellt einen neutralen PlaybackRequest für den Driver.
