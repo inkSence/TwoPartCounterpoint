@@ -16,33 +16,33 @@ from __future__ import annotations
 from pathlib import Path
 
 from a_domain.Melodie import Melodie
-from a_domain.Tonleitern import f_dur
+from b_application.use_case_interactor import UseCaseInteractor
 from .config import AppConfig
 from .ports.score_export_port import ScoreExportPort
 from .ports.playback_port import CounterpointPlaybackPort, PlaybackSettings
 from .MidiAdapter import MidiAdapter
-from b_application.use_case_interactor import UseCaseInteractor
+
 
 class TwoPartCounterpointController:
-    def __init__(self, base_path: Path | None = None, config: AppConfig | None = None,
-                 score_exporter: ScoreExportPort | None = None,
-                 playback_port: CounterpointPlaybackPort | None = None,
-                 midi_adapter: MidiAdapter | None = None,
-                 interactor: UseCaseInteractor | None = None) -> None:
+    def __init__(self, base_path: Path,
+                 config: AppConfig,
+                 score_exporter: ScoreExportPort,
+                 playback_port: CounterpointPlaybackPort,
+                 midi_adapter: MidiAdapter,
+                 interactor: UseCaseInteractor) -> None:
+        """Controller, dessen Abhängigkeiten vollständig via Main verdrahtet werden.
+        """
         # base_path zeigt auf das Projekt-Root (eine Ebene über c_adapters)
-        self.base_path = base_path or Path(__file__).resolve().parent.parent
-        self.config = config or AppConfig()
-        # Port für Partitur-Export (wird in Main per DI gesetzt)
+        self.base_path = base_path
+        self.config = config
+        # Ports/Adapter/Use-Cases (DI)
         self.score_exporter = score_exporter
-        # Port für Wiedergabe (Driver, wird in Main per DI gesetzt)
         self.playback_port = playback_port
-        # Adapter zum Bau des Playback-Requests (neutral)
-        self.midi_adapter = midi_adapter or MidiAdapter()
-        # Use-Case-Interactor (Application-Schicht)
-        self.interactor = interactor or UseCaseInteractor()
+        self.midi_adapter = midi_adapter
+        self.interactor = interactor
 
     def build_choral(self):
-        return Melodie(self.config.wWIHNS_1, f_dur)
+        return self.interactor.build_choral(self.config.wWIHNS_1)
 
     # --------- Use-Case-Delegation ---------
     def generate_counterpoint(self, choral: Melodie):
@@ -51,23 +51,12 @@ class TwoPartCounterpointController:
 
     def export_musescore(self, kontrapunkt: Melodie):
         """Exportiert den Kontrapunkt über den konfigurierten Score-Exporter und gibt den Pfad zurück."""
-        if self.score_exporter is None:
-            raise RuntimeError("Kein ScoreExportPort konfiguriert. Bitte in main einen Exporter injizieren.")
         out_pfad = self.score_exporter.export_melody(kontrapunkt)
         print(f"MuseScore-Datei geschrieben: {out_pfad}")
 
     def playback_realtime(self, choral: Melodie, kontrapunkt: Melodie, settings: PlaybackSettings) -> None:
         """Spielt Choral und Kontrapunkt über den injizierten Playback-Port ab.
-
-        Der Controller kennt keine FluidSynth-Details mehr. Er baut lediglich
-        einen neutralen PlaybackRequest über den MidiAdapter. Die nötigen
-        Note-Events werden in der Application-Schicht (UseCaseInteractor)
-        erzeugt und hier übergeben. Anschließend wird der Request an den
-        Playback-Port (Driver) übergeben.
         """
-        if self.playback_port is None:
-            raise RuntimeError("Kein CounterpointPlaybackPort konfiguriert. Bitte in main einen Playback-Driver injizieren.")
-
         # Events zentral im Interactor erzeugen
         events = self.interactor.build_note_events(choral, kontrapunkt)
         # Request mit den erzeugten Events bauen

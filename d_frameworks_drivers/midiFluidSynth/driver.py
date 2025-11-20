@@ -10,7 +10,6 @@ gesamte FluidSynth-/MIDI-Echtzeitlogik. Dadurch bleibt die Adapter-/
 Controller-Schicht frei von FluidSynth-Details (Clean Architecture).
 """
 
-import os
 import time
 from pathlib import Path
 
@@ -25,16 +24,32 @@ class FluidSynthPlaybackDriver(CounterpointPlaybackPort):
 
     # --- interne Helfer ---
     def _choose_soundfont(self) -> str:
-        # 1) explizit via ENV
-        env_sf = os.environ.get("FS_SF2")
-        if env_sf and Path(env_sf).exists():
-            return env_sf
-        # 2) projektlokal (gemäß Driver-Config)
-        local = (self.project_root / self.cfg.sf_local_relpath).resolve()
-        if local.exists():
-            return str(local)
-        # 3) systemweit (gemäß Driver-Config)
-        return str(self.cfg.sf_system_path)
+        """Ermittelt den SoundFont ausschließlich aus dem paketlokalen Ordner.
+
+        Zugelassener Suchort:
+        - d_frameworks_drivers/midiFluidSynth/soundFonts/
+        """
+        pkg_sf_dir = (self.project_root / "d_frameworks_drivers" / "midiFluidSynth" / "soundFonts").resolve()
+
+        # Präferenz: in der Config angegebener lokale Standard (liegt ebenfalls unterhalb des Paketordners)
+        cfg_local = (self.project_root / self.cfg.sf_local_relpath).resolve()
+        if cfg_local.exists():
+            return str(cfg_local)
+
+        # Feste Kandidaten im paketlokalen Ordner
+        pkg_candidates = [
+            pkg_sf_dir / "1276-soft_tenor_sax.sf2",
+            pkg_sf_dir / "alto_sax_2.sf2",
+            pkg_sf_dir / "example.sf2",
+        ]
+        for c in pkg_candidates:
+            if c.exists():
+                return str(c)
+
+        # Nichts gefunden: klare Fehlermeldung (nur paketlokaler Ort wird unterstützt)
+        raise FileNotFoundError(
+            "Kein SoundFont gefunden. Lege eine .sf2 in d_frameworks_drivers/midiFluidSynth/soundFonts/."
+        )
 
     # --- Port-Implementierung ---
     def play(self, request: PlaybackRequest) -> None:  # noqa: C901 (Komplexität ok, da eng gekapselt)
@@ -56,7 +71,8 @@ class FluidSynthPlaybackDriver(CounterpointPlaybackPort):
             sf_path = self._choose_soundfont()
             if not Path(sf_path).exists():
                 raise FileNotFoundError(
-                    f"Kein gültiger SoundFont gefunden (versucht: {sf_path}). Setze ENV FS_SF2 oder lege eine .sf2 in soundFonts/."
+                    f"Kein gültiger SoundFont gefunden (versucht: {sf_path}). "
+                    "Lege eine .sf2 in d_frameworks_drivers/midiFluidSynth/soundFonts/."
                 )
             sfid = fl.sfload(sf_path)
 

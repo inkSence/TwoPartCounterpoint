@@ -27,16 +27,16 @@ class MuseScoreFileExporter(ScoreExportPort):
     """
 
     def __init__(self, project_root: Path, app_cfg: AppConfig,
-                 ms_cfg: MuseScoreConfig | None = None,
-                 fs: FileSystemAdapter | None = None,
-                 xml: MuseScoreXmlAdapter | None = None) -> None:
+                 ms_cfg: MuseScoreConfig,
+                 fs: FileSystemAdapter,
+                 xml: MuseScoreXmlAdapter) -> None:
         self.project_root = project_root
         self.app_cfg = app_cfg
-        self.musescore = ms_cfg or MuseScoreConfig()
+        self.musescore = ms_cfg
         # FileSystem-Adapter für alle Dateioperationen (Clean Architecture)
-        self.fs = fs or FileSystemAdapter(project_root)
+        self.fs = fs
         # XML-Adapter kapselt Template-Navigation und Knotenbau
-        self.xml = xml or MuseScoreXmlAdapter()
+        self.xml = xml
 
     # --- interne Helfer ---
     def _template_path(self) -> Path:

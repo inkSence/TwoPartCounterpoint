@@ -39,8 +39,10 @@ class MidiFluidSynthConfig:
     # GM-Preset-Reihenfolge (bank, program), z. B. Piano (0), Tenor Sax (65)
     presets: list[tuple[int, int]] = field(default_factory=lambda: [(0, 0), (0, 65)])
 
-    # SoundFonts: bevorzugt projektlokal, sonst systemweit
-    sf_local_relpath: Path = Path("soundFonts") / "1276-soft_tenor_sax.sf2"
+    # SoundFonts: bevorzugt paketlokal (innerhalb von d_frameworks_drivers/midiFluidSynth), sonst systemweit
+    # Hinweis: Der Pfad ist relativ zum Projekt-Root (Composition Root reicht project_root an den Driver durch).
+    # Neuer Standard-Suchort: d_frameworks_drivers/midiFluidSynth/soundFonts/
+    sf_local_relpath: Path = Path("d_frameworks_drivers") / "midiFluidSynth" / "soundFonts" / "1276-soft_tenor_sax.sf2"
     sf_system_path: Path = Path("/usr/share/sounds/sf2/FluidR3_GM.sf2")
 
     def iter_audio_drivers(self) -> Iterable[str]:

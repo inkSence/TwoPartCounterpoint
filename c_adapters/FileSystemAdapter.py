@@ -14,8 +14,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
-
 class FileSystemAdapter:
     def __init__(self, base_path: Path) -> None:
         # base_path zeigt auf das Projekt-Root

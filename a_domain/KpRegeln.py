@@ -158,7 +158,7 @@ class KpRegeln(object):
             contra = midipitch_1 + 12
             notenlaenge = self.choral.notenliste[-1][1]
         if contra == 0:
-            print("get_contra konnte keine mögliche Note finden")
+            print("get_contra konnte keine mögliche Note finden. Versuche vorher eine andere Note.")
             subtract = self.kontrapunkt.notenliste.pop(-1)[1]
             # löscht gleichzeitig das letzte Element & ergibt, wann position_im_stueck nochmal ansetzen muss.
             if len(self.harmonie.interval_qualities) > 0:

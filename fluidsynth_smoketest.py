@@ -38,8 +38,9 @@ def find_soundfont(explicit: str | None = None) -> str:
 
     Priorität:
     1) explizit per Argument/ENV (FS_SF2)
-    2) Systemweite FluidR3_GM.sf2
-    3) Projektlokale SoundFonts
+    2) Paketlokale SoundFonts unter d_frameworks_drivers/midiFluidSynth/soundFonts
+    3) (Fallback) Projekt-Altpfad soundFonts/
+    4) Systemweite FluidR3_GM.sf2
     """
     candidates = []
     if explicit:
@@ -47,14 +48,19 @@ def find_soundfont(explicit: str | None = None) -> str:
     env_sf = os.environ.get("FS_SF2")
     if env_sf:
         candidates.append(env_sf)
-    candidates.extend(
-        [
-            "/usr/share/sounds/sf2/FluidR3_GM.sf2",
-            str(Path(__file__).parent / "soundFonts/1276-soft_tenor_sax.sf2"),
-            str(Path(__file__).parent / "soundFonts/alto_sax_2.sf2"),
-            str(Path(__file__).parent / "soundFonts/example.sf2"),
-        ]
-    )
+    pkg = Path(__file__).parent / "d_frameworks_drivers/midiFluidSynth/soundFonts"
+    old = Path(__file__).parent / "soundFonts"
+    candidates.extend([
+        str(pkg / "1276-soft_tenor_sax.sf2"),
+        str(pkg / "alto_sax_2.sf2"),
+        str(pkg / "example.sf2"),
+        # Fallback: alte Projektstruktur
+        str(old / "1276-soft_tenor_sax.sf2"),
+        str(old / "alto_sax_2.sf2"),
+        str(old / "example.sf2"),
+        # Systemweite Standard-SF2 am Ende
+        "/usr/share/sounds/sf2/FluidR3_GM.sf2",
+    ])
     for c in candidates:
         if c and Path(c).exists():
             return c
