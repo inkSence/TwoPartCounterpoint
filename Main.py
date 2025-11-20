@@ -19,7 +19,6 @@ from b_application.generate_counterpoint_use_case import GenerateCounterpointUse
 from b_application.build_note_events_use_case import BuildNoteEventsUseCase
 from b_application.use_case_interactor import UseCaseInteractor
 from d_frameworks_drivers.musescore.exporter import MuseScoreFileExporter
-from d_frameworks_drivers.midiFluidSynth.config import MidiFluidSynthConfig
 from d_frameworks_drivers.midiFluidSynth.driver import FluidSynthPlaybackDriver
 from d_frameworks_drivers.musescore.config import MuseScoreConfig
 
@@ -34,10 +33,8 @@ def main() -> int:
     fs = FileSystemAdapter(base)
     xml = MuseScoreXmlAdapter()
     score_exporter = MuseScoreFileExporter(project_root=base, app_cfg=app_cfg, ms_cfg=ms_cfg, fs=fs, xml=xml)
-    # Playback-Driver (FluidSynth) und neutrale Settings
-    mf_cfg = MidiFluidSynthConfig()
-    playback_settings = mf_cfg.to_settings()
-    playback_driver = FluidSynthPlaybackDriver(project_root=base, cfg=mf_cfg)
+    # Playback-Driver (FluidSynth) – nutzt Default-Konfiguration
+    playback_driver = FluidSynthPlaybackDriver(project_root=base)
 
     # Application-Use-Cases und Interactor
     generate_uc = GenerateCounterpointUseCase()
@@ -49,7 +46,6 @@ def main() -> int:
 
     # Controller instanziieren (liefert Pfad- und Hilfsfunktionen)
     ctrl = TwoPartCounterpointController(
-        base_path=base,
         config=app_cfg,
         score_exporter=score_exporter,
         playback_port=playback_driver,
@@ -65,7 +61,7 @@ def main() -> int:
     ctrl.export_musescore(kontrapunkt)
 
     # 3) Wiedergabe
-    ctrl.playback_realtime(choral, kontrapunkt, playback_settings)
+    ctrl.playback_realtime(choral, kontrapunkt)
     return 0
 
 

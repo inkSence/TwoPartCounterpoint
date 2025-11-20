@@ -6,15 +6,40 @@ from __future__ import annotations
 """Konfiguration für die MIDI/Audio-Wiedergabe via FluidSynth (Driver-Schicht).
 
 Diese Datei hält alle Abspiel-bezogenen Parameter, die NICHT in die
-Adapter-Schicht (c_adapters) gehören. Sie kann von außen (main/Composition
-Root) verwendet werden, um neutrale PlaybackSettings zu erzeugen.
+Adapter-Schicht (c_adapters) gehören. Sie wird vom Driver on-demand genutzt,
+um PlaybackSettings zu erzeugen.
 """
 
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
-from c_adapters.ports.playback_port import PlaybackSettings
+
+@dataclass(frozen=True)
+class PlaybackSettings:
+    """Wiedergabe-Parameter für den FluidSynth-Driver.
+
+    Diese Settings sind lokal in der Driver-Schicht definiert und werden
+    on-demand aus MidiFluidSynthConfig erzeugt. Sie werden NICHT mehr über die
+    Adapter-/Port-Schicht herumgereicht.
+    """
+
+    # Zeitsteuerung
+    tick_seconds: float
+    fadeout_seconds: float
+
+    # Audio / Synth
+    samplerate: float
+    gain: float
+    drivers: tuple[str, ...]
+
+    # MIDI-Parameter
+    midi_velocity: int
+    cc_volume: int
+    cc_expression: int
+
+    # Presets (bank, program)
+    presets: tuple[tuple[int, int], ...]
 
 
 @dataclass
@@ -39,11 +64,9 @@ class MidiFluidSynthConfig:
     # GM-Preset-Reihenfolge (bank, program), z. B. Piano (0), Tenor Sax (65)
     presets: list[tuple[int, int]] = field(default_factory=lambda: [(0, 0), (0, 65)])
 
-    # SoundFonts: bevorzugt paketlokal (innerhalb von d_frameworks_drivers/midiFluidSynth), sonst systemweit
-    # Hinweis: Der Pfad ist relativ zum Projekt-Root (Composition Root reicht project_root an den Driver durch).
+    # SoundFont: paketlokaler Standard (relativ zum Projekt-Root)
     # Neuer Standard-Suchort: d_frameworks_drivers/midiFluidSynth/soundFonts/
     sf_local_relpath: Path = Path("d_frameworks_drivers") / "midiFluidSynth" / "soundFonts" / "1276-soft_tenor_sax.sf2"
-    sf_system_path: Path = Path("/usr/share/sounds/sf2/FluidR3_GM.sf2")
 
     def iter_audio_drivers(self) -> Iterable[str]:
         yield self.preferred_driver
@@ -51,11 +74,10 @@ class MidiFluidSynthConfig:
             yield drv
 
     def to_settings(self) -> PlaybackSettings:
-        """Erzeuge neutrale PlaybackSettings für den Port/Adapter.
+        """Erzeugt PlaybackSettings für den FluidSynth-Driver.
 
-        Hinweis: Der SoundFont-Pfad ist bewusst NICHT Teil der Settings, sondern
-        wird separat durch den FileSystemAdapter ermittelt und in den
-        PlaybackRequest eingefügt.
+        Hinweis: Der SoundFont-Pfad ist kein Teil der Settings, sondern wird im
+        Driver selbst (_choose_soundfont) ermittelt.
         """
         return PlaybackSettings(
             tick_seconds=self.tick_seconds,

@@ -13,18 +13,16 @@ Dadurch bleibt main.py schlank und die Adapter-Schicht frei von Driver-Details.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from a_domain.Melodie import Melodie
 from b_application.use_case_interactor import UseCaseInteractor
 from .config import AppConfig
 from .ports.score_export_port import ScoreExportPort
-from .ports.playback_port import CounterpointPlaybackPort, PlaybackSettings
+from .ports.playback_port import CounterpointPlaybackPort
 from .MidiAdapter import MidiAdapter
 
 
 class TwoPartCounterpointController:
-    def __init__(self, base_path: Path,
+    def __init__(self,
                  config: AppConfig,
                  score_exporter: ScoreExportPort,
                  playback_port: CounterpointPlaybackPort,
@@ -32,8 +30,6 @@ class TwoPartCounterpointController:
                  interactor: UseCaseInteractor) -> None:
         """Controller, dessen Abhängigkeiten vollständig via Main verdrahtet werden.
         """
-        # base_path zeigt auf das Projekt-Root (eine Ebene über c_adapters)
-        self.base_path = base_path
         self.config = config
         # Ports/Adapter/Use-Cases (DI)
         self.score_exporter = score_exporter
@@ -54,11 +50,11 @@ class TwoPartCounterpointController:
         out_pfad = self.score_exporter.export_melody(kontrapunkt)
         print(f"MuseScore-Datei geschrieben: {out_pfad}")
 
-    def playback_realtime(self, choral: Melodie, kontrapunkt: Melodie, settings: PlaybackSettings) -> None:
+    def playback_realtime(self, choral: Melodie, kontrapunkt: Melodie) -> None:
         """Spielt Choral und Kontrapunkt über den injizierten Playback-Port ab.
         """
         # Events zentral im Interactor erzeugen
         events = self.interactor.build_note_events(choral, kontrapunkt)
         # Request mit den erzeugten Events bauen
-        request = self.midi_adapter.build_request(choral, kontrapunkt, settings, events=events)
+        request = self.midi_adapter.build_request(choral, kontrapunkt, events=events)
         self.playback_port.play(request)

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Fluidsynth Audio Smoketest for PipeWire/Pulse
+Fluidsynth Audio Smoketest für PipeWire/Pulse
 
 Ziel: Beim Ausführen soll ein kurzer Ton hörbar sein. Primär wird der
 FluidSynth-Audiotreiber "pipewire" verwendet, mit Fallback auf
@@ -12,16 +12,19 @@ werden.
 Aufrufbeispiele:
   python3 fluidsynth_smoketest.py
   python3 fluidsynth_smoketest.py --driver pulseaudio
-  python3 fluidsynth_smoketest.py --sf2 /usr/share/sounds/sf2/FluidR3_GM.sf2
+  python3 fluidsynth_smoketest.py --sf2 d_frameworks_drivers/midiFluidSynth/soundFonts/1276-soft_tenor_sax.sf2
 
 Hinweis: Dieser Test verwendet FluidSynths eigenen Audioausgang;
 PyAudio/PortAudio wird hier bewusst nicht genutzt.
+
+SoundFonts: Es wird ausschließlich im paketlokalen Ordner
+"d_frameworks_drivers/midiFluidSynth/soundFonts/" gesucht (es sei denn,
+ein Pfad wird explizit via --sf2 übergeben).
 """
 
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 import time
 from pathlib import Path
@@ -37,35 +40,25 @@ def find_soundfont(explicit: str | None = None) -> str:
     """Finde eine brauchbare SF2-Datei.
 
     Priorität:
-    1) explizit per Argument/ENV (FS_SF2)
+    1) explizit per Argument --sf2
     2) Paketlokale SoundFonts unter d_frameworks_drivers/midiFluidSynth/soundFonts
-    3) (Fallback) Projekt-Altpfad soundFonts/
-    4) Systemweite FluidR3_GM.sf2
     """
-    candidates = []
     if explicit:
-        candidates.append(explicit)
-    env_sf = os.environ.get("FS_SF2")
-    if env_sf:
-        candidates.append(env_sf)
+        p = Path(explicit)
+        if p.exists():
+            return str(p)
+        raise FileNotFoundError(f"Angegebenes --sf2 nicht gefunden: {explicit}")
     pkg = Path(__file__).parent / "d_frameworks_drivers/midiFluidSynth/soundFonts"
-    old = Path(__file__).parent / "soundFonts"
-    candidates.extend([
-        str(pkg / "1276-soft_tenor_sax.sf2"),
-        str(pkg / "alto_sax_2.sf2"),
-        str(pkg / "example.sf2"),
-        # Fallback: alte Projektstruktur
-        str(old / "1276-soft_tenor_sax.sf2"),
-        str(old / "alto_sax_2.sf2"),
-        str(old / "example.sf2"),
-        # Systemweite Standard-SF2 am Ende
-        "/usr/share/sounds/sf2/FluidR3_GM.sf2",
-    ])
+    candidates = [
+        pkg / "1276-soft_tenor_sax.sf2",
+        pkg / "alto_sax_2.sf2",
+        pkg / "example.sf2",
+    ]
     for c in candidates:
-        if c and Path(c).exists():
-            return c
+        if c.exists():
+            return str(c)
     raise FileNotFoundError(
-        "Keine SoundFont-Datei gefunden. Bitte --sf2 angeben oder FS_SF2 setzen."
+        "Keine SoundFont-Datei gefunden. Lege eine .sf2 in d_frameworks_drivers/midiFluidSynth/soundFonts/"
     )
 
 

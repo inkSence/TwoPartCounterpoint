@@ -60,7 +60,8 @@ class FluidSynthPlaybackDriver(CounterpointPlaybackPort):
                 "pyfluidsynth/fluidsynth konnte nicht importiert werden. Bitte installieren: 'pip install pyfluidsynth'."
             ) from e
 
-        settings = request.settings
+        # Wiedergabe-Parameter on-demand aus der Driver-Konfiguration ableiten
+        settings = self.cfg.to_settings()
         fl = None
 
         try:
@@ -113,12 +114,7 @@ class FluidSynthPlaybackDriver(CounterpointPlaybackPort):
             except Exception:
                 pass
 
-            # Zeitgesteuerte Echtzeit-Schleife (nur noch Event-basiert)
-            if not request.events:
-                raise ValueError(
-                    "PlaybackRequest.events fehlen – bitte den MidiAdapter/Sequencer verwenden."
-                )
-
+            # Zeitgesteuerte Echtzeit-Schleife (Event-basiert)
             t0 = time.perf_counter()
             for ev in request.events:
                 target = t0 + ev.time_tick * settings.tick_seconds

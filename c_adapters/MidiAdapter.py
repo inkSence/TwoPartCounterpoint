@@ -14,8 +14,8 @@ from __future__ import annotations
 
 
 from a_domain.Melodie import Melodie
-from .ports.playback_port import PlaybackRequest, PlaybackSettings
-from typing import Sequence, Optional
+from .ports.playback_port import PlaybackRequest
+from typing import Sequence
 try:
     # nur für Typen, zur Laufzeit optional
     from b_application.build_note_events_use_case import NoteEvent
@@ -33,18 +33,16 @@ class MidiAdapter:
         self,
         choral: Melodie,
         kontrapunkt: Melodie,
-        settings: PlaybackSettings,
-        events: Optional[Sequence[NoteEvent]] = None,
+        events: Sequence[NoteEvent],
     ) -> PlaybackRequest:
         """Erstellt einen neutralen PlaybackRequest für den Driver.
-
-        Hinweis: Alle Abspiel-Parameter kommen über `settings` aus der äußeren
-        Schicht (z. B. d_frameworks_drivers.midiFluidSynth.config) und NICHT
-        aus c_adapters.config.
+        
+        Hinweis: Abspiel-Parameter (Samplerate, Treiber, Velocity, ...) werden
+        nicht mehr hier übergeben, sondern vom konkreten Driver aus seiner
+        eigenen Konfiguration gelesen.
         """
         return PlaybackRequest(
             choral=choral,
             kontrapunkt=kontrapunkt,
-            settings=settings,
-            events=tuple(events) if events is not None else None,
+            events=tuple(events),
         )
